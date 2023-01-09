@@ -11,4 +11,8 @@ interface DeletionJobClient {
     @Headers("Content-Type: application/json")
     @POST("/deletionJob")
     fun createDeletionJobTyped(): Call<Result<Unit, ApiError>>
+
+    @Headers("Content-Type: application/json")
+    @POST("/deletionJob")
+    suspend fun createDeletionJobAsyncTyped(): Result<Unit, ApiError>
 }
