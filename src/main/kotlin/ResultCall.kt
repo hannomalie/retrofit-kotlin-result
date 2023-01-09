@@ -17,7 +17,7 @@ data class HttpError(val code: Int, val body: String?) : ApiError
 data class NetworkError(val throwable: Throwable) : ApiError
 data class UnknownApiError(val throwable: Throwable) : ApiError
 
-private class ResultCall<R>(
+internal class ResultCall<R>(
     private val delegate: Call<R>,
     private val successType: Type,
 ) : Call<Result<R, ApiError>> {

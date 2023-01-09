@@ -24,6 +24,7 @@ class DeletionJobClientTest {
 
     private fun createRetrofit(baseUrl: String): Retrofit = Retrofit.Builder()
         .addConverterFactory(JacksonConverterFactory.create())
+        .addCallAdapterFactory(ResultCallAdapterFactory())
         .baseUrl(baseUrl)
         .build()
 }
