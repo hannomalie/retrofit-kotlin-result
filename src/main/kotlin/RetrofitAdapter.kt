@@ -1,0 +1,1 @@
+// https://proandroiddev.com/retrofit-calladapter-for-either-type-2145781e1c20
