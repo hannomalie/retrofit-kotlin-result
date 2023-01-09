@@ -17,6 +17,7 @@ dependencies {
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.14.1")
 
     implementation("com.michael-bull.kotlin-result:kotlin-result:1.1.16")
+    implementation("com.michael-bull.kotlin-result:kotlin-result-coroutines:1.1.16")
     implementation("com.michael-bull.kotlin-retry:kotlin-retry:1.0.9")
     implementation("io.github.resilience4j:resilience4j-retrofit:1.7.1")
 
