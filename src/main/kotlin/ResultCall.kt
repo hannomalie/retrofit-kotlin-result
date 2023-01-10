@@ -1,6 +1,7 @@
 import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Ok
 import com.github.michaelbull.result.Result
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException
 import okhttp3.Request
 import okio.Timeout
 import retrofit2.Call
@@ -15,6 +16,7 @@ import java.lang.reflect.Type
 sealed interface ApiError
 data class HttpError(val code: Int, val body: String?) : ApiError
 data class NetworkError(val throwable: Throwable) : ApiError
+object CircuitBreakerOpen: ApiError
 data class UnknownApiError(val throwable: Throwable) : ApiError
 
 internal class ResultCall<R>(
@@ -30,6 +32,7 @@ internal class ResultCall<R>(
 
             override fun onFailure(call: Call<R>, throwable: Throwable) {
                 val error = when (throwable) {
+                    is CallNotPermittedException -> CircuitBreakerOpen
                     is IOException -> NetworkError(throwable)
                     else -> UnknownApiError(throwable)
                 }
@@ -39,7 +42,11 @@ internal class ResultCall<R>(
     )
 
     override fun clone(): Call<Result<R, ApiError>> = ResultCall(delegate, successType)
-    override fun execute(): Response<Result<R, ApiError>> = Response.success(delegate.execute().toResult(successType))
+    override fun execute(): Response<Result<R, ApiError>> = try {
+        Response.success(delegate.execute().toResult(successType))
+    } catch (e: CallNotPermittedException) {
+        Response.success(Err(CircuitBreakerOpen))
+    }
     override fun isExecuted() = delegate.isExecuted
 
     override fun cancel() {

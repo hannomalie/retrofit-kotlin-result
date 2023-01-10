@@ -1,12 +1,13 @@
 import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Ok
-import com.github.michaelbull.result.binding
+import com.github.michaelbull.result.get
 import junit.framework.AssertionFailedError
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import com.github.michaelbull.result.coroutines.binding.binding as asyncBinding
@@ -33,7 +34,7 @@ class DeletionJobClientTest {
             val deletionJobClient = retrofit.create(DeletionJobClient::class.java)
 
             val response = deletionJobClient.createDeletionJobTyped().execute().body()
-            Assertions.assertInstanceOf(Ok::class.java, response)
+            assertInstanceOf(Ok::class.java, response)
         }
 
         @Test
@@ -44,7 +45,7 @@ class DeletionJobClientTest {
 
             runBlocking {
                 val response = deletionJobClient.createDeletionJobAsyncTyped()
-                Assertions.assertInstanceOf(Ok::class.java, response)
+                assertInstanceOf(Ok::class.java, response)
             }
         }
 
@@ -56,7 +57,7 @@ class DeletionJobClientTest {
 
             runBlocking {
                 val response = deletionJobClient.createDeletionJobAsyncTyped()
-                Assertions.assertInstanceOf(Err::class.java, response)
+                assertInstanceOf(Err::class.java, response)
             }
         }
     }
@@ -81,7 +82,7 @@ class DeletionJobClientTest {
             val deletionJobClient = retrofit.create(DeletionJobClient::class.java)
 
             val response = deletionJobClient.cancelDeletionJobTyped().execute().body()
-            Assertions.assertInstanceOf(Ok::class.java, response)
+            assertInstanceOf(Ok::class.java, response)
         }
 
         @Test
@@ -92,7 +93,7 @@ class DeletionJobClientTest {
 
             runBlocking {
                 val response = deletionJobClient.cancelDeletionJobAsyncTyped()
-                Assertions.assertInstanceOf(Ok::class.java, response)
+                assertInstanceOf(Ok::class.java, response)
             }
         }
     }
@@ -108,11 +109,10 @@ class DeletionJobClientTest {
 
             runBlocking {
                 val result = asyncBinding {
-                    async { deletionJobClient.createDeletionJobAsyncTyped().bind() }
-                    val b = async { deletionJobClient.cancelDeletionJobAsyncTyped().bind() }
-                    b.await()
+                    deletionJobClient.createDeletionJobAsyncTyped().bind()
+                    deletionJobClient.cancelDeletionJobAsyncTyped().bind()
                 }
-                Assertions.assertInstanceOf(Ok::class.java, result)
+                assertInstanceOf(Ok::class.java, result)
             }
         }
 
@@ -128,12 +128,56 @@ class DeletionJobClientTest {
                     async { deletionJobClient.createDeletionJobAsyncTyped().bind() }
                     async { deletionJobClient.cancelDeletionJobAsyncTyped().bind() }.await()
                 }
-                Assertions.assertInstanceOf(Err::class.java, result)
+                assertInstanceOf(Err::class.java, result)
                 when(val error = (result as Err).error) {
                     is HttpError -> assertEquals(error.code, 503)
-                    is NetworkError -> AssertionFailedError("Expected an HttpError result but got NetworkError")
-                    is UnknownApiError -> AssertionFailedError("Expected an HttpError result but got NetworkError")
+                    is NetworkError -> throw AssertionFailedError("Expected an HttpError result but got NetworkError")
+                    is UnknownApiError -> throw AssertionFailedError("Expected an HttpError result but got NetworkError")
+                    CircuitBreakerOpen -> throw AssertionFailedError("Expected an HttpError result but got CircuitBreakerOpen")
                 }
+            }
+        }
+    }
+
+    @Nested
+    inner class CircuitBreaker {
+        @Test
+        fun `open circuitbreaker results in proper error`() = withServerAndRetrofit { server, retrofit ->
+            repeat(10) {
+                server.enqueue(MockResponse().setResponseCode(403))
+            }
+
+            val deletionJobClient = retrofit.create(DeletionJobClient::class.java)
+
+            repeat(10) {
+                assertInstanceOf(Err::class.java, deletionJobClient.createDeletionJobTyped().execute().body())
+            }
+            val result = deletionJobClient.createDeletionJobTyped().execute().body()!!
+            assertInstanceOf(Err::class.java, result)
+
+            when(val error = (result as Err<*>).error!!) {
+                CircuitBreakerOpen -> { }
+                else -> throw AssertionFailedError("Expected an CircuitBreakerOpen result but got ${error.javaClass}")
+            }
+        }
+
+        @Test
+        fun `open circuitbreaker results in proper error using async api`() = withServerAndRetrofit { server, retrofit ->
+            repeat(10) { server.enqueue(MockResponse().setResponseCode(403)) }
+
+            val deletionJobClient = retrofit.create(DeletionJobClient::class.java)
+
+            val result = runBlocking {
+                repeat(10) {
+                    assertInstanceOf(Err::class.java, deletionJobClient.createDeletionJobAsyncTyped())
+                }
+                deletionJobClient.createDeletionJobAsyncTyped()
+            }
+            assertInstanceOf(Err::class.java, result)
+
+            when(val error = (result as Err<*>).error!!) {
+                CircuitBreakerOpen -> { }
+                else -> throw AssertionFailedError("Expected an CircuitBreakerOpen result but got ${error.javaClass}")
             }
         }
     }
