@@ -117,6 +117,29 @@ class DeletionJobClientTest {
         }
 
         @Test
+        fun `deletion job lifecycle unhappy path is nice with comprehensions`() = withServerAndRetrofit { server, retrofit ->
+            server.enqueue(MockResponse().setResponseCode(503))
+
+            val deletionJobClient = retrofit.create(DeletionJobClient::class.java)
+
+            runBlocking {
+                val result = asyncBinding {
+                    deletionJobClient.createDeletionJobAsyncTyped().bind()
+                    deletionJobClient.cancelDeletionJobAsyncTyped().bind()
+                }
+                when(result) {
+                    is Ok -> {}
+                    is Err<ApiError> -> when(result.error) {
+                        CircuitBreakerOpen -> throw AssertionFailedError("Expected HttpError, got CircuitBreakerOpen")
+                        is HttpError -> { }
+                        is NetworkError -> throw AssertionFailedError("Expected HttpError, got NetworkError")
+                        is UnknownApiError -> throw AssertionFailedError("Expected HttpError, got UnknownApiError")
+                    }
+                }
+            }
+        }
+
+        @Test
         fun `deletion job creation short circuits nice with comprehensions`() = withServerAndRetrofit { server, retrofit ->
             server.enqueue(MockResponse().setResponseCode(503))
             server.enqueue(MockResponse().setResponseCode(503))
